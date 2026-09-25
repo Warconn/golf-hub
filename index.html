@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Golf Hub v3</title>
+<title>Golf Hub v4</title>
 <style>
 :root{
   --bg:#0a0f0c;--panel:#111814;--panel2:#162019;--panel3:#0d1410;
@@ -276,11 +276,12 @@ hr{border:0;height:1px;background:var(--line);margin:14px 0}
     </div>
   </section>
 
-  <div class="footer">Golf Hub v3 · screenshot first · exact rows + system summaries · local browser storage</div>
+  <div class="footer">Golf Hub v4 · screenshot first · exact rows + system summaries · local browser storage</div>
 </div>
 
 <script>
-const KEY="golfHub_v3";
+const KEY="golfHub_v4";
+const LEGACY_KEYS=["golfHub_v3","golfHub_v2","golfHub_v1"];
 const state=loadState();
 let selectedFiles=[];
 let pending=null;
@@ -295,52 +296,30 @@ function num(v){
 function avg(a){const x=a.filter(Number.isFinite);return x.length?x.reduce((s,v)=>s+v,0)/x.length:null}
 function fmt(v,d=1){return Number.isFinite(v)?v.toFixed(d):"--"}
 
-function seed(){
-  return {sessions:[
-    {
-      id:uid(),date:"2026-09-24",source:"Toptracer",club:"Driver",location:"",
-      origin:"provided-screenshot",filenames:["IMG_0727(1).PNG"],
-      systemAverages:{carry:107,total:147,ballSpeed:101},
-      shots:[
-        {shotNumber:1,carry:90,total:116,ballSpeed:89,confidence:"exact"},
-        {shotNumber:2,carry:85,total:111,ballSpeed:82,confidence:"exact"},
-        {shotNumber:3,carry:110,total:130,ballSpeed:93,confidence:"exact"},
-        {shotNumber:4,carry:110,total:151,ballSpeed:101,confidence:"exact"},
-        {shotNumber:5,carry:119,total:165,ballSpeed:106,confidence:"exact"},
-        {shotNumber:6,carry:90,total:159,ballSpeed:115,confidence:"exact"},
-        {shotNumber:7,carry:150,total:161,ballSpeed:109,confidence:"exact"},
-        {shotNumber:8,carry:126,total:165,ballSpeed:105,confidence:"exact"},
-        {shotNumber:9,carry:135,total:160,ballSpeed:108,confidence:"exact"},
-        {shotNumber:10,carry:77,total:122,ballSpeed:93,confidence:"exact"},
-        {shotNumber:11,carry:135,total:173,ballSpeed:108,confidence:"exact"},
-        {shotNumber:12,carry:116,total:149,ballSpeed:102,confidence:"exact"},
-        {shotNumber:13,carry:121,total:163,ballSpeed:106,confidence:"exact"},
-        {shotNumber:14,carry:118,total:177,ballSpeed:114,confidence:"exact"},
-        {shotNumber:15,carry:155,total:188,ballSpeed:115,confidence:"exact"},
-        {shotNumber:16,carry:120,total:151,ballSpeed:99,confidence:"exact"}
-      ],
-      rawText:"Seeded from the provided Toptracer Driver screenshot."
-    },
-    {
-      id:uid(),date:"2026-09-23",source:"Full Swing",club:"Unresolved",location:"Simulator",
-      origin:"provided-screenshot",filenames:["IMG_0720.jpg"],
-      systemAverages:{
-        carry:42.3,total:65.2,ballSpeed:55.8,clubSpeed:43.6,smash:1.29,spin:3028,apex:11.3
-      },
-      selectedShot:{
-        carry:34.6,total:56.2,ballSpeed:49.7,clubSpeed:34.0,smash:1.46,spin:2773,spinAxis:5,spinAxisDirection:"right",apex:8.6
-      },
-      shots:[],
-      rawText:"Seeded from the visible Full Swing side panel. Club is intentionally unresolved because the screenshot shows multiple club series."
-    }
-  ]}
+function isOldDemoSession(s){
+  if(!s)return false;
+  if(s.origin!=="provided-screenshot")return false;
+  const files=(s.filenames||[]).join(" ");
+  const raw=s.rawText||"";
+  return /IMG_0727\(1\)\.PNG|IMG_0720\.jpg/i.test(files) || /^Seeded from the /i.test(raw);
 }
 function loadState(){
   try{
-    const x=JSON.parse(localStorage.getItem(KEY));
-    if(x&&Array.isArray(x.sessions))return x
+    const current=JSON.parse(localStorage.getItem(KEY));
+    if(current&&Array.isArray(current.sessions))return current
   }catch(e){}
-  return seed()
+  for(const legacyKey of LEGACY_KEYS){
+    try{
+      const legacy=JSON.parse(localStorage.getItem(legacyKey));
+      if(legacy&&Array.isArray(legacy.sessions)){
+        const cleaned=legacy.sessions.filter(s=>!isOldDemoSession(s));
+        const migrated={sessions:cleaned};
+        localStorage.setItem(KEY,JSON.stringify(migrated));
+        return migrated
+      }
+    }catch(e){}
+  }
+  return {sessions:[]}
 }
 function saveState(){localStorage.setItem(KEY,JSON.stringify(state));renderAll()}
 
@@ -582,27 +561,65 @@ async function parseFullSwingHistory(file,worker){
     rawText:full.text
   }
 }
+function parseToptracerNumberToken(token){
+  if(token===null||token===undefined)return null;
+  let t=String(token).trim()
+    .replace(/[Oo]/g,"0")
+    .replace(/[Il|]/g,"1")
+    .replace(/N(?=\d)/g,"1");
+  if(/^N$/i.test(t))return null;
+  const m=t.match(/-?\d+(?:\.\d+)?/);
+  return m?num(m[0]):null
+}
+function inferToptracerShotNumbers(rows){
+  // Toptracer rows are shown in ascending order. Use surrounding rows to recover
+  // shot numbers that OCR occasionally reads as a letter, e.g. "11" -> "N".
+  for(let i=0;i<rows.length;i++){
+    if(Number.isFinite(rows[i].shotNumber))continue;
+    const prev=i>0&&Number.isFinite(rows[i-1].shotNumber)?rows[i-1].shotNumber:null;
+    const next=i<rows.length-1&&Number.isFinite(rows[i+1].shotNumber)?rows[i+1].shotNumber:null;
+    if(Number.isFinite(prev)&&Number.isFinite(next)&&next-prev===2)rows[i].shotNumber=prev+1;
+    else if(Number.isFinite(prev))rows[i].shotNumber=prev+1;
+    else if(Number.isFinite(next))rows[i].shotNumber=next-1;
+  }
+}
 function parseToptracer(text){
   const lines=text.replace(/\r/g,"").split("\n").map(x=>cleanOCR(x)).filter(Boolean);
   const shots=[];
   let systemAverages={};
+  let club=/\bDriver\b/i.test(text)?"Driver":"";
   for(const line of lines){
     if(/^AVG\b/i.test(line)){
       const nums=[...line.matchAll(/[0-9]+(?:\.[0-9]+)?/g)].map(x=>num(x[0]));
       if(nums.length>=3)systemAverages={carry:nums[0],total:nums[1],ballSpeed:nums[2]}
+      continue;
     }
-    const m=line.match(/^(\d{1,3})\s+([0-9]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9]+(?:\.[0-9]+)?)\s*(?:mph)?/i);
-    if(m)shots.push({shotNumber:num(m[1]),carry:num(m[2]),total:num(m[3]),ballSpeed:num(m[4]),confidence:"exact"})
-  }
-  if(!shots.length){
-    const whole=text.replace(/\n/g," ");
-    const re=/\b(\d{1,2})\s+([0-9]{2,3})\s*(?:yd|y0|yo)?\s+([0-9]{2,3})\s*(?:yd|y0|yo)?\s+([0-9]{2,3})\s*(?:mph|mpn|mp)?\b/gi;
-    let m;
-    while((m=re.exec(whole))!==null){
-      const sn=num(m[1]),ca=num(m[2]),to=num(m[3]),bs=num(m[4]);
-      if(sn>=1&&sn<=99&&ca<400&&to<450&&bs<250)shots.push({shotNumber:sn,carry:ca,total:to,ballSpeed:bs,confidence:"exact"})
+
+    // Allow common OCR substitutions from Toptracer screenshots:
+    // "N16" -> 116, "N10" -> 110, and a standalone "N" in the shot column.
+    const m=line.match(/^([0-9NIl|]{1,3})\s+([0-9NIl|]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9NIl|]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9NIl|]+(?:\.[0-9]+)?)\s*(?:mph)?/i);
+    if(!m)continue;
+    const row={
+      shotNumber:parseToptracerNumberToken(m[1]),
+      carry:parseToptracerNumberToken(m[2]),
+      total:parseToptracerNumberToken(m[3]),
+      ballSpeed:parseToptracerNumberToken(m[4]),
+      confidence:"exact"
+    };
+
+    // On Driver screenshots, OCR sometimes drops the leading 1 from a three-digit carry
+    // while the total and ball speed remain intact, e.g. 116 -> 16.
+    if(club==="Driver" && Number.isFinite(row.carry) && row.carry<40 &&
+       Number.isFinite(row.total) && row.total>100 &&
+       Number.isFinite(row.ballSpeed) && row.ballSpeed>70){
+      row.carry+=100;
+      row.confidence="corrected-ocr";
     }
+    if(Number.isFinite(row.carry)&&Number.isFinite(row.total)&&Number.isFinite(row.ballSpeed))shots.push(row)
   }
+
+  inferToptracerShotNumbers(shots);
+
   const seen=new Set(),dedup=[];
   for(const s of shots){
     const k=[s.shotNumber,s.carry,s.total,s.ballSpeed].join("|");
@@ -612,7 +629,7 @@ function parseToptracer(text){
   return {
     type:"Toptracer Shot Table",
     source:"Toptracer",
-    club:/\bDriver\b/i.test(text)?"Driver":"",
+    club:club,
     selectedShot:{},
     systemAverages:systemAverages,
     shots:dedup,
