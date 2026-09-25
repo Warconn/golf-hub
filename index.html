@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Golf Hub v3</title>
+<style>
+:root{
+  --bg:#0a0f0c;--panel:#111814;--panel2:#162019;--panel3:#0d1410;
+  --line:#26362d;--text:#f4f7f5;--muted:#95a49b;--accent:#76eda3;--accent2:#39cf76;
+  --warn:#ffd17e;--bad:#ff9292;--good:#9df0b8;--radius:18px;--shadow:0 16px 42px rgba(0,0,0,.28)
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--text);
+  background:radial-gradient(900px 480px at 100% -10%,rgba(57,207,118,.13),transparent 60%),var(--bg)
+}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.shell{max-width:1260px;margin:0 auto;padding:22px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{
+  width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--accent),var(--accent2));color:#071109;font-weight:950;font-size:20px;
+  box-shadow:0 8px 24px rgba(57,207,118,.2)
+}
+.brand h1{margin:0 0 2px;font-size:20px}
+.brand p{margin:0;color:var(--muted);font-size:12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#121a15;color:var(--text);border-radius:11px;padding:9px 12px}
+.btn.primary{background:var(--accent);color:#061109;border-color:transparent;font-weight:850}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad)}
+.nav{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:6px;
+  background:#0d1410;border:1px solid var(--line);border-radius:14px;margin-bottom:18px
+}
+.nav button{border:0;background:transparent;color:var(--muted);border-radius:10px;padding:10px;font-weight:760}
+.nav button.active{background:var(--panel2);color:var(--text)}
+.page{display:none}.page.active{display:block}
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,.012),transparent),var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);padding:17px;box-shadow:var(--shadow)
+}
+.grid{display:grid;gap:14px}.four{grid-template-columns:repeat(4,1fr)}.two{grid-template-columns:1.12fr .88fr}
+.hero{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:14px}
+.hero h2{margin:0 0 4px;font-size:25px;letter-spacing:-.03em}
+.hero p{margin:0;color:var(--muted)}
+.metric .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.09em}
+.metric .value{font-size:30px;font-weight:900;margin-top:6px}
+.small,.sub,.hint{color:var(--muted);font-size:12px}.hint{line-height:1.5}
+.notice{border:1px solid #33483a;background:#101912;border-radius:12px;padding:11px 12px;color:#cfe8d6;font-size:12px;line-height:1.48}
+.notice.warn{border-color:#5b4c2c;color:#f4dfb1;background:#18150f}
+.drop{
+  border:1px dashed #405c48;border-radius:16px;padding:24px;text-align:center;background:#0e1611;color:var(--muted);transition:.15s
+}
+.drop.drag{border-color:var(--accent);background:#14231a;color:var(--text)}
+.drop strong{display:block;color:var(--text);font-size:16px;margin-bottom:5px}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:12px}
+.preview{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0a0f0c}
+.preview img{width:100%;height:105px;object-fit:cover;display:block}
+.preview .cap{padding:7px;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preview .remove{position:absolute;top:5px;right:5px;width:25px;height:25px;border-radius:999px;border:1px solid var(--line);background:rgba(10,15,12,.9);color:var(--text)}
+.progress{height:9px;background:#0b100d;border:1px solid var(--line);border-radius:999px;overflow:hidden;margin:12px 0}
+.progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .2s}
+.review{display:none;margin-top:14px}.review.show{display:block}
+.tabs{display:flex;gap:7px;margin:12px 0}.tab{border:1px solid var(--line);background:var(--panel3);color:var(--muted);border-radius:10px;padding:8px 10px}.tab.active{color:var(--text);background:var(--panel2)}
+.tabpane{display:none}.tabpane.active{display:block}
+.detected{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:10px}
+.det{border:1px solid var(--line);background:var(--panel3);border-radius:12px;padding:10px}
+.det label{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.det strong{font-size:16px}
+.conf{display:inline-flex;align-items:center;gap:5px;font-size:10px;margin-top:6px;color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--good)}.dot.med{background:var(--warn)}.dot.low{background:var(--bad)}
+.questions{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+.field label{display:block;color:var(--muted);font-size:11px;margin-bottom:6px}
+.field input,.field select{
+  width:100%;background:#0d1410;color:var(--text);border:1px solid var(--line);border-radius:11px;padding:10px;outline:none
+}
+.field input:focus,.field select:focus{border-color:#4d7358}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:12px}
+th{color:var(--muted);font-weight:760;position:sticky;top:0;background:var(--panel)}
+.tablewrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:12px;margin-top:10px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.badge{font-size:10px;padding:4px 7px;border:1px solid #2e4435;background:#16231a;color:#ccebd5;border-radius:999px}.badge.warn{color:var(--warn)}
+.session-list{display:grid;gap:10px}.session{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;border:1px solid var(--line);background:var(--panel3);border-radius:14px;padding:13px}.session strong{display:block;margin-bottom:4px}.right{text-align:right}
+canvas{width:100%;height:250px;background:#0d1410;border:1px solid var(--line);border-radius:14px;display:block}
+hr{border:0;height:1px;background:var(--line);margin:14px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:12px}.kv div:nth-child(odd){color:var(--muted)}
+.section-title{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.empty{padding:22px;text-align:center;color:var(--muted);font-size:12px}
+.footer{text-align:center;color:var(--muted);font-size:10px;margin-top:18px}
+@media(max-width:980px){.four{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.detected{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.shell{padding:13px}.brand p{display:none}.nav{grid-template-columns:repeat(4,1fr)}.nav button{font-size:12px;padding:10px 5px}.questions{grid-template-columns:1fr}.detected{grid-template-columns:1fr 1fr}.session{grid-template-columns:1fr}.right{text-align:left}.hero{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="top">
+    <div class="brand">
+      <div class="logo">G</div>
+      <div><h1>Golf Hub</h1><p>Screenshot in. Normalized golf data out.</p></div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="backupBtn">Backup</button>
+      <button class="btn primary" data-go="import">+ Import screenshots</button>
+    </div>
+  </div>
+
+  <div class="nav">
+    <button class="active" data-page="dashboard">Dashboard</button>
+    <button data-page="import">Import</button>
+    <button data-page="sessions">Sessions</button>
+    <button data-page="schema">Schema</button>
+  </div>
+
+  <section id="dashboard" class="page active">
+    <div class="hero">
+      <div><h2>Your golf, one history</h2><p>Exact shot rows when available, system averages when available, and source kept with every metric.</p></div>
+    </div>
+    <div class="grid four">
+      <div class="card metric"><div class="label">Exact shots</div><div class="value" id="mShots">--</div><div class="small">Rows extracted from screenshots</div></div>
+      <div class="card metric"><div class="label">Sessions</div><div class="value" id="mSessions">--</div><div class="small">Across all systems</div></div>
+      <div class="card metric"><div class="label">Avg carry</div><div class="value" id="mCarry">--</div><div class="small">Exact visible shot rows only</div></div>
+      <div class="card metric"><div class="label">Avg ball speed</div><div class="value" id="mBall">--</div><div class="small">Exact visible shot rows only</div></div>
+    </div>
+
+    <div class="grid two" style="margin-top:14px">
+      <div class="card">
+        <div class="section-title"><div><h3 style="margin:0">Carry trend</h3><div class="sub">Session level, exact visible rows</div></div></div>
+        <div style="height:10px"></div><canvas id="trend" width="760" height="250"></canvas>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Data quality</h3>
+        <div id="qualitySummary" class="session-list" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin-top:0">Recent sessions</h3>
+      <div id="recent" class="session-list" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="import" class="page">
+    <div class="hero">
+      <div><h2>Screenshot import</h2><p>Upload a table, dispersion screen, shot history, or several screenshots from the same practice session.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="notice">
+        Golf Hub now keeps two separate layers of data: exact shot rows extracted from tables, and system reported summary metrics from simulator screens. It does not replace one with the other.
+      </div>
+      <div style="height:12px"></div>
+
+      <div class="drop" id="drop">
+        <strong>Drop screenshots here</strong>
+        Toptracer, Full Swing, SkyTrak, GolfTEC, Garmin, GSPro, TrackMan, or another system
+        <input id="files" type="file" accept="image/*" multiple style="display:none">
+      </div>
+
+      <div id="previews" class="preview-grid"></div>
+
+      <div id="analyzeArea" style="display:none">
+        <div class="progress"><span id="progressBar"></span></div>
+        <div class="hint" id="progressText">Ready to analyze.</div>
+        <div style="height:10px"></div>
+        <div class="actions">
+          <button class="btn primary" id="analyzeBtn">Analyze screenshots</button>
+          <button class="btn ghost" id="clearBtn">Clear</button>
+        </div>
+      </div>
+
+      <div class="review" id="review">
+        <hr>
+        <div class="section-title">
+          <div>
+            <h3 style="margin:0">Extraction review</h3>
+            <div class="sub">Numbers are read only. You only answer unresolved context.</div>
+          </div>
+          <div class="badges" id="reviewBadges"></div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="summaryPane">Summary metrics</button>
+          <button class="tab" data-tab="shotsPane">Shot rows</button>
+          <button class="tab" data-tab="provenancePane">Source details</button>
+        </div>
+
+        <div id="summaryPane" class="tabpane active">
+          <div id="summaryMetrics" class="detected"></div>
+          <div id="summaryNote" class="hint" style="margin-top:10px"></div>
+        </div>
+
+        <div id="shotsPane" class="tabpane">
+          <div id="shotStats" class="notice" style="margin-top:4px"></div>
+          <div class="tablewrap"><table id="shotsTable"></table></div>
+        </div>
+
+        <div id="provenancePane" class="tabpane">
+          <div id="provenance" class="kv"></div>
+          <div class="notice warn" style="margin-top:14px">
+            Dispersion dots from a chart are not stored as exact measurements unless the screenshot also exposes shot level numeric values. A future vision backend can add estimated chart points with an explicit estimated flag.
+          </div>
+        </div>
+
+        <div id="questionWrap">
+          <h3 style="margin-top:18px">Anything still missing?</h3>
+          <div class="questions">
+            <div class="field"><label>Source</label>
+              <select id="qSource">
+                <option value="">Choose if not detected</option>
+                <option>SkyTrak</option><option>Toptracer</option><option>Full Swing</option><option>GolfTEC</option>
+                <option>Garmin</option><option>GSPro</option><option>TrackMan</option><option>Other</option>
+              </select>
+            </div>
+            <div class="field"><label>Club</label><input id="qClub" placeholder="Only if it was not visible"></div>
+            <div class="field"><label>Session date</label><input id="qDate" type="date"></div>
+            <div class="field"><label>Location, optional</label><input id="qLocation" placeholder="Home, range, simulator..."></div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:14px">
+          <button class="btn primary" id="saveBtn">Save normalized session</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin-top:0">What gets normalized</h3>
+      <div class="hint">
+        Golf Hub maps labels such as Flat Carry, Carry, Distance Trend, Total Distance, Ball Speed, Club Speed, Smash Factor, Spin Rate, Launch Angle, Apex, Offline, Spin Axis, Face Angle, and Club Path into one common schema. System reported averages remain separate from averages computed from visible shot rows.
+      </div>
+    </div>
+  </section>
+
+  <section id="sessions" class="page">
+    <div class="hero">
+      <div><h2>Sessions</h2><p>Every imported session with its original source and extraction type.</p></div>
+      <div class="actions"><button class="btn" id="exportBtn">Export JSON</button><button class="btn danger" id="resetBtn">Reset</button></div>
+    </div>
+    <div class="card"><div id="allSessions" class="session-list"></div></div>
+  </section>
+
+  <section id="schema" class="page">
+    <div class="hero"><div><h2>Normalized schema</h2><p>The common model underneath every simulator.</p></div></div>
+    <div class="grid two">
+      <div class="card">
+        <h3 style="margin-top:0">Session</h3>
+        <div class="kv">
+          <div>source</div><div>Toptracer, Full Swing, SkyTrak, etc.</div>
+          <div>club</div><div>Driver, 7 Iron, etc.</div>
+          <div>date</div><div>Observed or user confirmed</div>
+          <div>screenshots</div><div>Original filenames and OCR provenance</div>
+          <div>systemAverages</div><div>Metrics explicitly shown as AVG by the source system</div>
+          <div>shots</div><div>Exact shot rows extracted from a visible table or shot history</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Shot</h3>
+        <div class="kv">
+          <div>shotNumber</div><div>Original row number when visible</div>
+          <div>carry</div><div>Normalized yards</div>
+          <div>total</div><div>Normalized yards</div>
+          <div>ballSpeed</div><div>mph</div>
+          <div>clubSpeed</div><div>mph</div>
+          <div>spin</div><div>rpm</div>
+          <div>launch</div><div>degrees</div>
+          <div>offline</div><div>yards, signed left/right when available</div>
+          <div>confidence</div><div>exact, system reported, estimated</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">Golf Hub v3 · screenshot first · exact rows + system summaries · local browser storage</div>
+</div>
+
+<script>
+const KEY="golfHub_v3";
+const state=loadState();
+let selectedFiles=[];
+let pending=null;
+
+function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
+function today(){return new Date().toISOString().slice(0,10)}
+function num(v){
+  if(v===null||v===undefined||v==="")return null;
+  const n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));
+  return Number.isFinite(n)?n:null
+}
+function avg(a){const x=a.filter(Number.isFinite);return x.length?x.reduce((s,v)=>s+v,0)/x.length:null}
+function fmt(v,d=1){return Number.isFinite(v)?v.toFixed(d):"--"}
+
+function seed(){
+  return {sessions:[
+    {
+      id:uid(),date:"2026-09-24",source:"Toptracer",club:"Driver",location:"",
+      origin:"provided-screenshot",filenames:["IMG_0727(1).PNG"],
+      systemAverages:{carry:107,total:147,ballSpeed:101},
+      shots:[
+        {shotNumber:1,carry:90,total:116,ballSpeed:89,confidence:"exact"},
+        {shotNumber:2,carry:85,total:111,ballSpeed:82,confidence:"exact"},
+        {shotNumber:3,carry:110,total:130,ballSpeed:93,confidence:"exact"},
+        {shotNumber:4,carry:110,total:151,ballSpeed:101,confidence:"exact"},
+        {shotNumber:5,carry:119,total:165,ballSpeed:106,confidence:"exact"},
+        {shotNumber:6,carry:90,total:159,ballSpeed:115,confidence:"exact"},
+        {shotNumber:7,carry:150,total:161,ballSpeed:109,confidence:"exact"},
+        {shotNumber:8,carry:126,total:165,ballSpeed:105,confidence:"exact"},
+        {shotNumber:9,carry:135,total:160,ballSpeed:108,confidence:"exact"},
+        {shotNumber:10,carry:77,total:122,ballSpeed:93,confidence:"exact"},
+        {shotNumber:11,carry:135,total:173,ballSpeed:108,confidence:"exact"},
+        {shotNumber:12,carry:116,total:149,ballSpeed:102,confidence:"exact"},
+        {shotNumber:13,carry:121,total:163,ballSpeed:106,confidence:"exact"},
+        {shotNumber:14,carry:118,total:177,ballSpeed:114,confidence:"exact"},
+        {shotNumber:15,carry:155,total:188,ballSpeed:115,confidence:"exact"},
+        {shotNumber:16,carry:120,total:151,ballSpeed:99,confidence:"exact"}
+      ],
+      rawText:"Seeded from the provided Toptracer Driver screenshot."
+    },
+    {
+      id:uid(),date:"2026-09-23",source:"Full Swing",club:"Unresolved",location:"Simulator",
+      origin:"provided-screenshot",filenames:["IMG_0720.jpg"],
+      systemAverages:{
+        carry:42.3,total:65.2,ballSpeed:55.8,clubSpeed:43.6,smash:1.29,spin:3028,apex:11.3
+      },
+      selectedShot:{
+        carry:34.6,total:56.2,ballSpeed:49.7,clubSpeed:34.0,smash:1.46,spin:2773,spinAxis:5,spinAxisDirection:"right",apex:8.6
+      },
+      shots:[],
+      rawText:"Seeded from the visible Full Swing side panel. Club is intentionally unresolved because the screenshot shows multiple club series."
+    }
+  ]}
+}
+function loadState(){
+  try{
+    const x=JSON.parse(localStorage.getItem(KEY));
+    if(x&&Array.isArray(x.sessions))return x
+  }catch(e){}
+  return seed()
+}
+function saveState(){localStorage.setItem(KEY,JSON.stringify(state));renderAll()}
+
+function navTo(id){
+  document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  document.querySelector(`.nav button[data-page="${id}"]`).classList.add("active")
+}
+document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>navTo(b.dataset.page));
+document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>navTo(b.dataset.go));
+
+const drop=document.getElementById("drop"),files=document.getElementById("files");
+drop.onclick=()=>files.click();
+["dragenter","dragover"].forEach(e=>drop.addEventListener(e,x=>{x.preventDefault();drop.classList.add("drag")}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,x=>{x.preventDefault();drop.classList.remove("drag")}));
+drop.addEventListener("drop",e=>addFiles([...e.dataTransfer.files]));
+files.onchange=()=>addFiles([...files.files]);
+
+function addFiles(list){
+  selectedFiles=[...selectedFiles,...list.filter(f=>f.type.startsWith("image/"))];
+  renderPreviews()
+}
+function renderPreviews(){
+  const wrap=document.getElementById("previews");
+  wrap.innerHTML="";
+  selectedFiles.forEach((f,i)=>{
+    const d=document.createElement("div");d.className="preview";
+    const img=document.createElement("img");img.src=URL.createObjectURL(f);
+    const cap=document.createElement("div");cap.className="cap";cap.textContent=f.name;
+    const rm=document.createElement("button");rm.className="remove";rm.textContent="×";
+    rm.onclick=(ev)=>{ev.stopPropagation();selectedFiles.splice(i,1);renderPreviews()};
+    d.append(img,cap,rm);wrap.appendChild(d)
+  });
+  document.getElementById("analyzeArea").style.display=selectedFiles.length?"block":"none"
+}
+function setProgress(p,t){
+  document.getElementById("progressBar").style.width=Math.max(0,Math.min(100,p))+"%";
+  document.getElementById("progressText").textContent=t
+}
+document.getElementById("clearBtn").onclick=()=>{
+  selectedFiles=[];pending=null;renderPreviews();document.getElementById("review").classList.remove("show");setProgress(0,"Ready to analyze.")
+};
+
+async function ensureTesseract(){
+  if(window.Tesseract)return;
+  setProgress(2,"Loading OCR engine...");
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.onload=resolve;s.onerror=()=>reject(new Error("Could not load OCR engine. Check internet access and try again."));
+    document.head.appendChild(s)
+  })
+}
+function inferSource(text){
+  const t=text.toLowerCase();
+  const rules=[
+    ["Full Swing",["shot dispersion","full swing","fullswing"]],
+    ["Toptracer",["toptracer","flat carry","distance trend"]],
+    ["SkyTrak",["skytrak","sky trak"]],
+    ["GolfTEC",["golftec","golf tec"]],
+    ["Garmin",["garmin","approach r10"]],
+    ["GSPro",["gspro","gs pro"]],
+    ["TrackMan",["trackman","track man"]]
+  ];
+  for(const [name,terms] of rules)if(terms.some(x=>t.includes(x)))return name;
+  return ""
+}
+function inferClub(text){
+  const t=text.toLowerCase().replace(/\s+/g," ");
+  const pats=[
+    [/driver|\bdrv\b/,"Driver"],[/\b3[\s-]*wood\b|\b3w\b/,"3 Wood"],[/\b5[\s-]*wood\b|\b5w\b/,"5 Wood"],
+    [/\b4[\s-]*iron\b|\b4i\b/,"4 Iron"],[/\b5[\s-]*iron\b|\b5i\b/,"5 Iron"],[/\b6[\s-]*iron\b|\b6i\b/,"6 Iron"],
+    [/\b7[\s-]*iron\b|\b7i\b/,"7 Iron"],[/\b8[\s-]*iron\b|\b8i\b/,"8 Iron"],[/\b9[\s-]*iron\b|\b9i\b/,"9 Iron"],
+    [/pitching wedge|\bpw\b/,"PW"],[/gap wedge|\bgw\b/,"GW"],[/sand wedge|\bsw\b/,"SW"],[/lob wedge|\blw\b/,"LW"]
+  ];
+  const hits=pats.filter(([re])=>re.test(t)).map(([,n])=>n);
+  return hits.length===1?hits[0]:""
+}
+function firstNumberAfter(text,label){
+  const i=text.toLowerCase().indexOf(label.toLowerCase());
+  if(i<0)return null;
+  const chunk=text.slice(i,i+150).replace(/\n/g," ");
+  const m=chunk.match(/-?[0-9]+(?:\.[0-9]+)?/);
+  return m?num(m[0]):null
+}
+function avgNumberAfter(text,label){
+  const i=text.toLowerCase().indexOf(label.toLowerCase());
+  if(i<0)return null;
+  const chunk=text.slice(i,i+210).replace(/\n/g," ");
+  const m=chunk.match(/avg(?:erage)?\s*[:\-]?\s*(-?[0-9]+(?:\.[0-9]+)?)/i);
+  if(m)return num(m[1]);
+  const vals=[...chunk.matchAll(/-?[0-9]+(?:\.[0-9]+)?/g)].map(x=>num(x[0])).filter(Number.isFinite);
+  return vals.length>=2?vals[1]:null
+}
+function parseFullSwing(text){
+  const labels={
+    carry:["carry"],total:["total"],ballSpeed:["ball speed"],clubSpeed:["club speed"],
+    smash:["smash factor"],apex:["apex"],spin:["spin rate"],spinAxis:["spin axis"],
+    faceAngle:["face angle"],clubPath:["club path"]
+  };
+  const selected={},systemAverages={};
+  for(const [k,arr] of Object.entries(labels)){
+    for(const label of arr){
+      const s=firstNumberAfter(text,label),a=avgNumberAfter(text,label);
+      if(Number.isFinite(s)&&!Number.isFinite(selected[k]))selected[k]=s;
+      if(Number.isFinite(a)&&!Number.isFinite(systemAverages[k]))systemAverages[k]=a
+    }
+  }
+  return {type:"summary",source:"Full Swing",club:inferClub(text),selectedShot:selected,systemAverages,shots:[],confidence:"medium"}
+}
+function parseToptracer(text){
+  const lines=text.replace(/\r/g,"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const shots=[];
+  let systemAverages={};
+  // Parse AVG line if OCR keeps row together.
+  for(const line of lines){
+    const compact=line.replace(/\s+/g," ");
+    if(/^avg\b/i.test(compact)){
+      const nums=[...compact.matchAll(/[0-9]+(?:\.[0-9]+)?/g)].map(x=>num(x[0]));
+      if(nums.length>=3)systemAverages={carry:nums[0],total:nums[1],ballSpeed:nums[2]}
+    }
+  }
+  // Parse normal rows when OCR keeps each row together.
+  for(const line of lines){
+    const compact=line.replace(/\s+/g," ");
+    const m=compact.match(/^(\d{1,3})\s+([0-9]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9]+(?:\.[0-9]+)?)\s*(?:mph)?/i);
+    if(m){
+      shots.push({shotNumber:num(m[1]),carry:num(m[2]),total:num(m[3]),ballSpeed:num(m[4]),confidence:"exact"})
+    }
+  }
+  // Fallback: rows often OCR as "1 90 yd 116 yd 89 mph", but with stray spaces.
+  if(!shots.length){
+    const whole=text.replace(/\n/g," ");
+    const re=/\b(\d{1,2})\s+([0-9]{2,3})\s*(?:yd|y0|yo)?\s+([0-9]{2,3})\s*(?:yd|y0|yo)?\s+([0-9]{2,3})\s*(?:mph|mpn|mp)?\b/gi;
+    let m;
+    while((m=re.exec(whole))!==null){
+      const sn=num(m[1]),ca=num(m[2]),to=num(m[3]),bs=num(m[4]);
+      if(sn>=1&&sn<=99&&ca<400&&to<450&&bs<250)shots.push({shotNumber:sn,carry:ca,total:to,ballSpeed:bs,confidence:"exact"})
+    }
+  }
+  // Deduplicate by shot number, carry, total, speed.
+  const seen=new Set(),dedup=[];
+  for(const s of shots){
+    const k=[s.shotNumber,s.carry,s.total,s.ballSpeed].join("|");
+    if(!seen.has(k)){seen.add(k);dedup.push(s)}
+  }
+  dedup.sort((a,b)=>(a.shotNumber||999)-(b.shotNumber||999));
+  return {type:"table",source:"Toptracer",club:inferClub(text),selectedShot:{},systemAverages,shots:dedup,confidence:dedup.length?"high":"medium"}
+}
+function genericParse(text){
+  const source=inferSource(text);
+  if(source==="Toptracer")return parseToptracer(text);
+  if(source==="Full Swing")return parseFullSwing(text);
+  const sys={};
+  const map={
+    carry:["carry distance","carry"],total:["total distance","total"],ballSpeed:["ball speed"],
+    clubSpeed:["club speed","clubhead speed"],smash:["smash factor","smash"],spin:["spin rate","spin"],
+    launch:["launch angle","launch"],apex:["apex"],offline:["offline"],spinAxis:["spin axis"],
+    faceAngle:["face angle"],clubPath:["club path"]
+  };
+  for(const [k,labels] of Object.entries(map)){
+    for(const label of labels){
+      const v=avgNumberAfter(text,label) ?? firstNumberAfter(text,label);
+      if(Number.isFinite(v)){sys[k]=v;break}
+    }
+  }
+  return {type:"generic",source,club:inferClub(text),selectedShot:{},systemAverages:sys,shots:[],confidence:"medium"}
+}
+function mergeParsed(items){
+  const sources=[...new Set(items.map(x=>x.source).filter(Boolean))];
+  const clubs=[...new Set(items.map(x=>x.club).filter(Boolean))];
+  const source=sources.length===1?sources[0]:"";
+  const club=clubs.length===1?clubs[0]:"";
+  const systemAverages={},selectedShot={};
+  const keys=["carry","total","ballSpeed","clubSpeed","smash","spin","launch","apex","offline","spinAxis","faceAngle","clubPath"];
+  for(const k of keys){
+    const av=items.map(x=>x.systemAverages?.[k]).filter(Number.isFinite);
+    const sv=items.map(x=>x.selectedShot?.[k]).filter(Number.isFinite);
+    if(av.length)systemAverages[k]=avg(av);
+    if(sv.length)selectedShot[k]=sv[0]
+  }
+  const allShots=items.flatMap(x=>x.shots||[]);
+  const seen=new Set(),shots=[];
+  for(const s of allShots){
+    const k=[s.shotNumber,s.carry,s.total,s.ballSpeed,s.clubSpeed,s.spin].join("|");
+    if(!seen.has(k)){seen.add(k);shots.push(s)}
+  }
+  shots.sort((a,b)=>(a.shotNumber||999)-(b.shotNumber||999));
+  return {source,club,systemAverages,selectedShot,shots,items}
+}
+
+document.getElementById("analyzeBtn").onclick=async()=>{
+  if(!selectedFiles.length)return;
+  document.getElementById("analyzeBtn").disabled=true;
+  document.getElementById("review").classList.remove("show");
+  try{
+    await ensureTesseract();
+    const parsed=[],raw=[];
+    for(let i=0;i<selectedFiles.length;i++){
+      const f=selectedFiles[i];
+      setProgress(5+(i/selectedFiles.length)*88,`Reading ${i+1} of ${selectedFiles.length}: ${f.name}`);
+      const result=await Tesseract.recognize(f,"eng",{
+        logger:m=>{
+          if(m.status==="recognizing text"){
+            const base=5+(i/selectedFiles.length)*88;
+            const portion=(m.progress||0)*(88/selectedFiles.length);
+            setProgress(base+portion,`Reading ${i+1} of ${selectedFiles.length}: ${Math.round((m.progress||0)*100)}%`)
+          }
+        }
+      });
+      const text=result?.data?.text||"";
+      raw.push(text);
+      parsed.push(genericParse(text))
+    }
+    const merged=mergeParsed(parsed);
+    const inferredDate=new Date(Math.max(...selectedFiles.map(f=>f.lastModified||Date.now()))).toISOString().slice(0,10);
+    pending={
+      ...merged,rawText:raw.join("\n\n--- SCREENSHOT ---\n\n"),
+      filenames:selectedFiles.map(f=>f.name),date:inferredDate
+    };
+    showReview();
+    setProgress(100,`Analysis complete. Found ${pending.shots.length} exact shot row${pending.shots.length===1?"":"s"}.`)
+  }catch(err){
+    setProgress(0,"Could not analyze: "+err.message)
+  }finally{
+    document.getElementById("analyzeBtn").disabled=false
+  }
+};
+
+const labels={
+  carry:["Carry","yd"],total:["Total","yd"],ballSpeed:["Ball speed","mph"],clubSpeed:["Club speed","mph"],
+  smash:["Smash",""],spin:["Spin","rpm"],launch:["Launch","°"],apex:["Apex","ft"],offline:["Offline","yd"],
+  spinAxis:["Spin axis","°"],faceAngle:["Face angle","°"],clubPath:["Club path","°"]
+};
+function metricCards(obj,confidence="system reported"){
+  const entries=Object.entries(labels).filter(([k])=>Number.isFinite(obj?.[k]));
+  if(!entries.length)return `<div class="empty" style="grid-column:1/-1">No confident summary metrics found.</div>`;
+  return entries.map(([k,[label,unit]])=>{
+    const v=obj[k],d=k==="smash"?2:1;
+    const cls=confidence==="exact"?"":"med";
+    return `<div class="det"><label>${label}</label><strong>${fmt(v,d)}${unit?" "+unit:""}</strong><div class="conf"><span class="dot ${cls}"></span>${confidence}</div></div>`
+  }).join("")
+}
+function showReview(){
+  if(!pending)return;
+  document.getElementById("summaryMetrics").innerHTML=metricCards(pending.systemAverages,"system reported");
+  const visCarry=avg(pending.shots.map(x=>x.carry)),visTotal=avg(pending.shots.map(x=>x.total)),visBall=avg(pending.shots.map(x=>x.ballSpeed));
+  let note=[];
+  if(pending.shots.length){
+    note.push(`Visible shot rows average ${Number.isFinite(visCarry)?fmt(visCarry)+" yd carry":""}${Number.isFinite(visTotal)?" · "+fmt(visTotal)+" yd total":""}${Number.isFinite(visBall)?" · "+fmt(visBall)+" mph ball speed":""}.`);
+    if(Object.keys(pending.systemAverages).length)note.push("These can differ from the displayed system AVG if the screenshot only shows part of the session.")
+  }
+  if(Object.keys(pending.selectedShot||{}).length)note.push("A selected shot was also detected and is stored separately from the session average.");
+  document.getElementById("summaryNote").textContent=note.join(" ");
+
+  document.getElementById("shotsTable").innerHTML=shotTable(pending.shots);
+  document.getElementById("shotStats").textContent=pending.shots.length
+    ? `${pending.shots.length} exact shot rows detected. Computed visible averages: ${Number.isFinite(visCarry)?fmt(visCarry)+" yd carry":"n/a"}${Number.isFinite(visTotal)?" · "+fmt(visTotal)+" yd total":""}${Number.isFinite(visBall)?" · "+fmt(visBall)+" mph ball speed":""}.`
+    : "No exact shot table was found in these screenshots. Summary values can still be saved.";
+
+  const types=[...new Set(pending.items.map(x=>x.type))];
+  document.getElementById("reviewBadges").innerHTML=[
+    pending.source?`<span class="badge">${pending.source}</span>`:`<span class="badge warn">source unresolved</span>`,
+    pending.club?`<span class="badge">${pending.club}</span>`:`<span class="badge warn">club unresolved</span>`,
+    `<span class="badge">${pending.shots.length} shot rows</span>`,
+    ...types.map(t=>`<span class="badge">${t}</span>`)
+  ].join("");
+
+  document.getElementById("provenance").innerHTML=[
+    ["Screenshots",pending.filenames.join(", ")],
+    ["Detected source",pending.source||"Unresolved"],
+    ["Detected club",pending.club||"Unresolved"],
+    ["Exact shot rows",String(pending.shots.length)],
+    ["System averages",Object.keys(pending.systemAverages).length?Object.keys(pending.systemAverages).join(", "):"None"],
+    ["Selected shot metrics",Object.keys(pending.selectedShot||{}).length?Object.keys(pending.selectedShot).join(", "):"None"],
+    ["Raw OCR retained","Yes, inside the session backup"]
+  ].map(([a,b])=>`<div>${a}</div><div>${b}</div>`).join("");
+
+  document.getElementById("qSource").value=pending.source||"";
+  document.getElementById("qClub").value=pending.club||"";
+  document.getElementById("qDate").value=pending.date||today();
+  document.getElementById("qLocation").value="";
+  document.getElementById("review").classList.add("show")
+}
+function shotTable(shots){
+  if(!shots.length)return `<tr><td class="empty">No exact rows detected.</td></tr>`;
+  const cols=[
+    ["shotNumber","Shot"],["carry","Carry"],["total","Total"],["ballSpeed","Ball speed"],
+    ["clubSpeed","Club speed"],["smash","Smash"],["spin","Spin"],["launch","Launch"],["offline","Offline"]
+  ];
+  const used=cols.filter(([k])=>shots.some(s=>Number.isFinite(s[k])));
+  return `<thead><tr>${used.map(([,l])=>`<th>${l}</th>`).join("")}</tr></thead><tbody>`+
+    shots.map(s=>`<tr>${used.map(([k])=>{
+      if(!Number.isFinite(s[k]))return "<td>--</td>";
+      let suffix="";
+      if(["carry","total","offline"].includes(k))suffix=" yd";
+      if(["ballSpeed","clubSpeed"].includes(k))suffix=" mph";
+      if(k==="spin")suffix=" rpm";
+      if(k==="launch")suffix="°";
+      return `<td>${fmt(s[k],k==="smash"?2:(k==="shotNumber"?0:1))}${suffix}</td>`
+    }).join("")}</tr>`).join("")+"</tbody>"
+}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".tabpane").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");document.getElementById(b.dataset.tab).classList.add("active")
+});
+document.getElementById("saveBtn").onclick=()=>{
+  if(!pending)return;
+  const source=document.getElementById("qSource").value||pending.source||"Other";
+  const club=document.getElementById("qClub").value.trim()||pending.club||"Unresolved";
+  const date=document.getElementById("qDate").value||pending.date||today();
+  const location=document.getElementById("qLocation").value.trim();
+  if(!pending.shots.length&&!Object.keys(pending.systemAverages).length&&!Object.keys(pending.selectedShot||{}).length){
+    alert("No reliable numeric golf data was detected. Try a clearer screenshot or crop closer to the results.");return
+  }
+  state.sessions.push({
+    id:uid(),date,source,club,location,origin:"screenshot-ocr",
+    filenames:pending.filenames,systemAverages:pending.systemAverages,selectedShot:pending.selectedShot,
+    shots:pending.shots,rawText:pending.rawText
+  });
+  saveState();
+  selectedFiles=[];pending=null;renderPreviews();
+  document.getElementById("review").classList.remove("show");
+  setProgress(0,"Ready to analyze.");navTo("dashboard")
+};
+
+function exactShots(){return state.sessions.flatMap(s=>s.shots||[])}
+function sessionVisibleAvg(s,k){return avg((s.shots||[]).map(x=>x[k]))}
+function sessionCard(s){
+  const carry=sessionVisibleAvg(s,"carry");
+  const sys=s.systemAverages||{};
+  const bits=[];
+  if(Number.isFinite(carry))bits.push(`visible shots ${fmt(carry)} yd carry`);
+  else if(Number.isFinite(sys.carry))bits.push(`system AVG ${fmt(sys.carry)} yd carry`);
+  const q=(s.shots||[]).length?`${(s.shots||[]).length} exact rows`:`summary only`;
+  return `<div class="session">
+    <div>
+      <strong>${s.date} · ${s.club||"Unresolved club"}</strong>
+      <div class="small">${s.location||"Practice"} · ${s.source||"Unknown source"}</div>
+      <div class="badges">
+        <span class="badge">${s.origin||"import"}</span>
+        <span class="badge">${q}</span>
+        ${(s.filenames||[]).slice(0,2).map(x=>`<span class="badge">${x}</span>`).join("")}
+      </div>
+    </div>
+    <div class="right"><strong>${bits[0]||"Saved"}</strong><div class="small">${Object.keys(sys).length?Object.keys(sys).length+" system metrics":""}</div></div>
+  </div>`
+}
+function renderDashboard(){
+  const shots=exactShots();
+  document.getElementById("mShots").textContent=shots.length||"0";
+  document.getElementById("mSessions").textContent=state.sessions.length||"0";
+  const c=avg(shots.map(x=>x.carry)),b=avg(shots.map(x=>x.ballSpeed));
+  document.getElementById("mCarry").textContent=Number.isFinite(c)?fmt(c)+" yd":"--";
+  document.getElementById("mBall").textContent=Number.isFinite(b)?fmt(b)+" mph":"--";
+  const exactSessions=state.sessions.filter(s=>(s.shots||[]).length).length;
+  const summaryOnly=state.sessions.filter(s=>!(s.shots||[]).length&&Object.keys(s.systemAverages||{}).length).length;
+  const unresolved=state.sessions.filter(s=>!s.club||s.club==="Unresolved").length;
+  document.getElementById("qualitySummary").innerHTML=[
+    ["Exact shot data",`${exactSessions} session${exactSessions===1?"":"s"}`],
+    ["Summary only",`${summaryOnly} session${summaryOnly===1?"":"s"}`],
+    ["Needs club confirmation",`${unresolved} session${unresolved===1?"":"s"}`]
+  ].map(([a,b])=>`<div class="session"><div><strong>${a}</strong><div class="small">${b}</div></div></div>`).join("");
+  const recent=[...state.sessions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  document.getElementById("recent").innerHTML=recent.length?recent.map(sessionCard).join(""):`<div class="empty">No sessions yet.</div>`;
+  drawTrend()
+}
+function drawTrend(){
+  const c=document.getElementById("trend"),ctx=c.getContext("2d"),W=c.width,H=c.height,p={l:45,r:18,t:18,b:32};
+  ctx.clearRect(0,0,W,H);ctx.strokeStyle="#27372d";ctx.lineWidth=1;
+  for(let i=0;i<5;i++){let y=p.t+i*(H-p.t-p.b)/4;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(W-p.r,y);ctx.stroke()}
+  const pts=state.sessions.map(s=>({date:s.date,v:sessionVisibleAvg(s,"carry")})).filter(x=>Number.isFinite(x.v)).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!pts.length){ctx.fillStyle="#95a49b";ctx.font="14px sans-serif";ctx.fillText("No exact carry rows yet",p.l,50);return}
+  const min=Math.min(...pts.map(x=>x.v))*.9,max=Math.max(...pts.map(x=>x.v))*1.1||1;
+  const x=i=>p.l+(pts.length===1?(W-p.l-p.r)/2:i*(W-p.l-p.r)/(pts.length-1));
+  const y=v=>H-p.b-(v-min)/(max-min||1)*(H-p.t-p.b);
+  ctx.strokeStyle="#76eda3";ctx.lineWidth=3;ctx.beginPath();pts.forEach((a,i)=>i?ctx.lineTo(x(i),y(a.v)):ctx.moveTo(x(i),y(a.v)));ctx.stroke();
+  pts.forEach((a,i)=>{ctx.fillStyle="#76eda3";ctx.beginPath();ctx.arc(x(i),y(a.v),5,0,Math.PI*2);ctx.fill()})
+}
+function renderSessions(){
+  const arr=[...state.sessions].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById("allSessions").innerHTML=arr.length?arr.map(sessionCard).join(""):`<div class="empty">No sessions yet.</div>`
+}
+function renderAll(){renderDashboard();renderSessions()}
+renderAll();
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download=`golf-hub-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)
+}
+document.getElementById("backupBtn").onclick=exportJSON;
+document.getElementById("exportBtn").onclick=exportJSON;
+document.getElementById("resetBtn").onclick=()=>{
+  if(confirm("Delete all Golf Hub data from this browser?")){
+    state.sessions=[];saveState()
+  }
+};
+</script>
+</body>
+</html>
