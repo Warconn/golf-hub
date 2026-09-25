@@ -147,18 +147,18 @@ hr{border:0;height:1px;background:var(--line);margin:14px 0}
 
   <section id="import" class="page">
     <div class="hero">
-      <div><h2>Screenshot import</h2><p>Upload a table, dispersion screen, shot history, or several screenshots from the same practice session.</p></div>
+      <div><h2>Screenshot import</h2><p>Upload Full Swing Shot History or Toptracer table screenshots. Dispersion extraction comes next.</p></div>
     </div>
 
     <div class="card">
       <div class="notice">
-        Golf Hub now keeps two separate layers of data: exact shot rows extracted from tables, and system reported summary metrics from simulator screens. It does not replace one with the other.
+        Table-first beta: Full Swing Shot History and Toptracer shot tables are supported now. Upload multiple screenshots from one session and Golf Hub will merge and deduplicate the rows. Dispersion screens are intentionally deferred until table extraction is stable.
       </div>
       <div style="height:12px"></div>
 
       <div class="drop" id="drop">
-        <strong>Drop screenshots here</strong>
-        Toptracer, Full Swing, SkyTrak, GolfTEC, Garmin, GSPro, TrackMan, or another system
+        <strong>Drop shot-history tables here</strong>
+        Full Swing Shot History or Toptracer table screenshots
         <input id="files" type="file" accept="image/*" multiple style="display:none">
       </div>
 
@@ -169,7 +169,7 @@ hr{border:0;height:1px;background:var(--line);margin:14px 0}
         <div class="hint" id="progressText">Ready to analyze.</div>
         <div style="height:10px"></div>
         <div class="actions">
-          <button class="btn primary" id="analyzeBtn">Analyze screenshots</button>
+          <button class="btn primary" id="analyzeBtn">Extract table</button>
           <button class="btn ghost" id="clearBtn">Clear</button>
         </div>
       </div>
@@ -179,7 +179,7 @@ hr{border:0;height:1px;background:var(--line);margin:14px 0}
         <div class="section-title">
           <div>
             <h3 style="margin:0">Extraction review</h3>
-            <div class="sub">Numbers are read only. You only answer unresolved context.</div>
+            <div class="sub">Extracted metrics are read only. You only answer unresolved context.</div>
           </div>
           <div class="badges" id="reviewBadges"></div>
         </div>
@@ -385,59 +385,304 @@ document.getElementById("clearBtn").onclick=()=>{
   selectedFiles=[];pending=null;renderPreviews();document.getElementById("review").classList.remove("show");setProgress(0,"Ready to analyze.")
 };
 
+
 async function ensureTesseract(){
   if(window.Tesseract)return;
   setProgress(2,"Loading OCR engine...");
   await new Promise((resolve,reject)=>{
     const s=document.createElement("script");
     s.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-    s.onload=resolve;s.onerror=()=>reject(new Error("Could not load OCR engine. Check internet access and try again."));
+    s.onload=resolve;
+    s.onerror=()=>reject(new Error("Could not load OCR engine. Check internet access and try again."));
     document.head.appendChild(s)
   })
 }
-function inferSource(text){
-  const t=text.toLowerCase();
-  const rules=[
-    ["Full Swing",["shot dispersion","full swing","fullswing"]],
-    ["Toptracer",["toptracer","flat carry","distance trend"]],
-    ["SkyTrak",["skytrak","sky trak"]],
-    ["GolfTEC",["golftec","golf tec"]],
-    ["Garmin",["garmin","approach r10"]],
-    ["GSPro",["gspro","gs pro"]],
-    ["TrackMan",["trackman","track man"]]
-  ];
-  for(const [name,terms] of rules)if(terms.some(x=>t.includes(x)))return name;
-  return ""
+async function imageFromFile(file){
+  return await new Promise((resolve,reject)=>{
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("Could not read image."))};
+    img.src=url
+  })
 }
-function inferClub(text){
-  const t=text.toLowerCase().replace(/\s+/g," ");
-  const pats=[
-    [/driver|\bdrv\b/,"Driver"],[/\b3[\s-]*wood\b|\b3w\b/,"3 Wood"],[/\b5[\s-]*wood\b|\b5w\b/,"5 Wood"],
-    [/\b4[\s-]*iron\b|\b4i\b/,"4 Iron"],[/\b5[\s-]*iron\b|\b5i\b/,"5 Iron"],[/\b6[\s-]*iron\b|\b6i\b/,"6 Iron"],
-    [/\b7[\s-]*iron\b|\b7i\b/,"7 Iron"],[/\b8[\s-]*iron\b|\b8i\b/,"8 Iron"],[/\b9[\s-]*iron\b|\b9i\b/,"9 Iron"],
-    [/pitching wedge|\bpw\b/,"PW"],[/gap wedge|\bgw\b/,"GW"],[/sand wedge|\bsw\b/,"SW"],[/lob wedge|\blw\b/,"LW"]
-  ];
-  const hits=pats.filter(([re])=>re.test(t)).map(([,n])=>n);
-  return hits.length===1?hits[0]:""
+function makeCanvas(img){
+  const maxW=2200,scale=Math.min(1,maxW/img.naturalWidth);
+  const c=document.createElement("canvas");
+  c.width=Math.round(img.naturalWidth*scale);
+  c.height=Math.round(img.naturalHeight*scale);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+  return c
 }
-function firstNumberAfter(text,label){
-  const i=text.toLowerCase().indexOf(label.toLowerCase());
-  if(i<0)return null;
-  const chunk=text.slice(i,i+150).replace(/\n/g," ");
-  const m=chunk.match(/-?[0-9]+(?:\.[0-9]+)?/);
-  return m?num(m[0]):null
+function detectBlueAvgBand(canvas){
+  const ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height,d=ctx.getImageData(0,0,w,h).data;
+  const counts=new Int32Array(h);
+  for(let y=Math.floor(h*.34);y<Math.floor(h*.80);y++){
+    let n=0;
+    for(let x=Math.floor(w*.08);x<Math.floor(w*.94);x++){
+      const i=(y*w+x)*4,r=d[i],g=d[i+1],b=d[i+2];
+      if(b>95 && b-r>55 && b-g>18 && r<125)n++
+    }
+    counts[y]=n
+  }
+  let peakY=0,peak=0;
+  for(let y=0;y<h;y++)if(counts[y]>peak){peak=counts[y];peakY=y}
+  if(peak<Math.max(120,w*.15))return null;
+  const threshold=peak*.35;
+  let y0=peakY,y1=peakY;
+  while(y0>0&&counts[y0-1]>threshold)y0--;
+  while(y1<h-1&&counts[y1+1]>threshold)y1++;
+  const xs=[];
+  for(let y=y0;y<=y1;y++){
+    for(let x=Math.floor(w*.08);x<Math.floor(w*.94);x++){
+      const i=(y*w+x)*4,r=d[i],g=d[i+1],b=d[i+2];
+      if(b>95 && b-r>55 && b-g>18 && r<125)xs.push(x)
+    }
+  }
+  xs.sort((a,b)=>a-b);
+  if(xs.length<200)return null;
+  const x0=xs[Math.floor(xs.length*.01)],x1=xs[Math.floor(xs.length*.99)];
+  return {x0:x0,x1:x1,y0:y0,y1:y1,width:x1-x0,height:y1-y0+1}
 }
-function avgNumberAfter(text,label){
-  const i=text.toLowerCase().indexOf(label.toLowerCase());
-  if(i<0)return null;
-  const chunk=text.slice(i,i+210).replace(/\n/g," ");
-  const m=chunk.match(/avg(?:erage)?\s*[:\-]?\s*(-?[0-9]+(?:\.[0-9]+)?)/i);
-  if(m)return num(m[1]);
-  const vals=[...chunk.matchAll(/-?[0-9]+(?:\.[0-9]+)?/g)].map(x=>num(x[0])).filter(Number.isFinite);
-  return vals.length>=2?vals[1]:null
+function cropCanvas(source,x,y,w,h,scale=4,invert=true){
+  x=Math.max(0,Math.floor(x));y=Math.max(0,Math.floor(y));
+  w=Math.min(source.width-x,Math.floor(w));h=Math.min(source.height-y,Math.floor(h));
+  const out=document.createElement("canvas");
+  out.width=Math.max(1,w*scale);out.height=Math.max(1,h*scale);
+  const o=out.getContext("2d");
+  o.drawImage(source,x,y,w,h,0,0,out.width,out.height);
+  const im=o.getImageData(0,0,out.width,out.height),d=im.data;
+  for(let i=0;i<d.length;i+=4){
+    const gray=Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2]);
+    let v=Math.max(0,Math.min(255,(gray-115)*1.8+128));
+    if(invert)v=255-v;
+    d[i]=d[i+1]=d[i+2]=v
+  }
+  o.putImageData(im,0,0);
+  return out
 }
-function parseFullSwing(text){
-  const labels={
+function cleanOCR(s){
+  return (s||"").replace(/[Oo]/g,"0").replace(/[|]/g,"1").replace(/,/g,".").replace(/\s+/g," ").trim()
+}
+function parseCell(text,directional=false){
+  const t=cleanOCR(text),m=t.match(/-?\d+(?:\.\d+)?/);
+  if(!m)return null;
+  let v=num(m[0]);
+  if(!Number.isFinite(v))return null;
+  if(directional){
+    if(/L/i.test(t))v=-Math.abs(v);
+    else if(/R/i.test(t))v=Math.abs(v)
+  }
+  return v
+}
+function numericTokens(text){
+  const t=cleanOCR(text),out=[];
+  const re=/-?\d+(?:\.\d+)?(?:\s*°?\s*[RL])?/gi;
+  let m;
+  while((m=re.exec(t))!==null)out.push(m[0]);
+  return out
+}
+function inferShotNumbers(rows){
+  const anchors=[];
+  rows.forEach((r,i)=>{if(Number.isFinite(r.shotNumber)&&r.shotNumber>=1&&r.shotNumber<=999)anchors.push(r.shotNumber+i)});
+  if(!anchors.length)return;
+  anchors.sort((a,b)=>a-b);
+  const start=anchors[Math.floor(anchors.length/2)];
+  rows.forEach((r,i)=>{if(!Number.isFinite(r.shotNumber))r.shotNumber=start-i})
+}
+async function ocrCanvas(worker,canvas,psm,whitelist=""){
+  await worker.setParameters({
+    tessedit_pageseg_mode:String(psm),
+    preserve_interword_spaces:"1",
+    tessedit_char_whitelist:whitelist
+  });
+  const r=await worker.recognize(canvas);
+  return {text:r.data&&r.data.text?r.data.text:"",confidence:r.data&&r.data.confidence?r.data.confidence:0}
+}
+function mapFullSwingTokens(text,includeShot=true){
+  const raw=numericTokens(text);
+  if(!raw.length)return {};
+  let tokens=raw.slice(),result={};
+  if(includeShot){
+    const first=parseCell(tokens[0],false);
+    if(Number.isFinite(first)&&Number.isInteger(first)&&first>=1&&first<=999){
+      result.shotNumber=first;
+      tokens=tokens.slice(1)
+    }
+  }
+  const keys=["launch","descent","horiz","faceAngle","clubPath","faceToPath","sideCarry","sideTotal"];
+  const directional=new Set(["horiz","faceAngle","clubPath","faceToPath","sideCarry","sideTotal"]);
+  if(tokens.length>=8){
+    tokens=tokens.slice(0,8);
+    keys.forEach((k,i)=>{
+      const v=parseCell(tokens[i],directional.has(k));
+      if(Number.isFinite(v))result[k]=v
+    })
+  }
+  return result
+}
+async function parseFullSwingHistory(file,worker){
+  const img=await imageFromFile(file),canvas=makeCanvas(img),band=detectBlueAvgBand(canvas);
+  if(!band)return null;
+  const full=await ocrCanvas(worker,canvas,6,"");
+  const clubMatch=full.text.match(/\b(Driver|[3-9]\s*Iron|[3-9]\s*Wood|PW|GW|SW|LW)\b/i);
+  const club=clubMatch?clubMatch[1].replace(/\s+/g," "):"";
+  const x0=band.x0-band.width*.035,x1=band.x1+band.width*.025,bw=x1-x0,bh=band.height;
+  const fractions=[[0,.055],[.055,.17],[.17,.285],[.285,.395],[.395,.50],[.50,.605],[.605,.72],[.72,.86],[.86,1]];
+  const keys=["shotNumber","launch","descent","horiz","faceAngle","clubPath","faceToPath","sideCarry","sideTotal"];
+  const directional=new Set(["horiz","faceAngle","clubPath","faceToPath","sideCarry","sideTotal"]);
+
+  const systemAverages={};
+  const avgStrip=cropCanvas(canvas,x0,band.y0-4,bw,band.height+8,4,true);
+  const avgLine=await ocrCanvas(worker,avgStrip,7,"0123456789.-RLAVG° ");
+  Object.assign(systemAverages,mapFullSwingTokens(avgLine.text,false));
+  for(let ci=1;ci<fractions.length;ci++){
+    const key=keys[ci];
+    if(Number.isFinite(systemAverages[key]))continue;
+    const a=fractions[ci][0],b=fractions[ci][1];
+    const cell=cropCanvas(canvas,x0+a*bw,band.y0-4,(b-a)*bw,band.height+8,5,true);
+    const rr=await ocrCanvas(worker,cell,7,"0123456789.-RL° ");
+    const v=parseCell(rr.text,directional.has(key));
+    if(Number.isFinite(v))systemAverages[key]=v
+  }
+
+  const rows=[],step=bh*.91;
+  for(let ri=0;ri<10;ri++){
+    const yc=band.y1+bh*.52+ri*step;
+    if(yc+bh*.42>canvas.height)break;
+    const strip=cropCanvas(canvas,x0,yc-bh*.39,bw,bh*.78,4,true);
+    const line=await ocrCanvas(worker,strip,7,"0123456789.-RL° ");
+    const row=mapFullSwingTokens(line.text,true);
+    let populated=Object.keys(row).filter(k=>k!=="shotNumber").length;
+    if(populated<5){
+      for(let ci=0;ci<fractions.length;ci++){
+        const key=keys[ci];
+        if(Number.isFinite(row[key]))continue;
+        const a=fractions[ci][0],b=fractions[ci][1];
+        const cell=cropCanvas(canvas,x0+a*bw,yc-bh*.38,(b-a)*bw,bh*.76,5,true);
+        const rr=await ocrCanvas(worker,cell,7,ci===0?"0123456789":"0123456789.-RL° ");
+        const v=parseCell(rr.text,directional.has(key));
+        if(Number.isFinite(v))row[key]=v
+      }
+      populated=Object.keys(row).filter(k=>k!=="shotNumber").length
+    }
+    if(populated>=3){
+      row.confidence="exact";
+      rows.push(row)
+    }
+  }
+  inferShotNumbers(rows);
+  return {
+    type:"Full Swing Shot History",
+    source:"Full Swing",
+    club:club,
+    selectedShot:{},
+    systemAverages:systemAverages,
+    shots:rows,
+    confidence:rows.length?"high":"low",
+    rawText:full.text
+  }
+}
+function parseToptracer(text){
+  const lines=text.replace(/\r/g,"").split("\n").map(x=>cleanOCR(x)).filter(Boolean);
+  const shots=[];
+  let systemAverages={};
+  for(const line of lines){
+    if(/^AVG\b/i.test(line)){
+      const nums=[...line.matchAll(/[0-9]+(?:\.[0-9]+)?/g)].map(x=>num(x[0]));
+      if(nums.length>=3)systemAverages={carry:nums[0],total:nums[1],ballSpeed:nums[2]}
+    }
+    const m=line.match(/^(\d{1,3})\s+([0-9]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9]+(?:\.[0-9]+)?)\s*(?:yd|yards?)?\s+([0-9]+(?:\.[0-9]+)?)\s*(?:mph)?/i);
+    if(m)shots.push({shotNumber:num(m[1]),carry:num(m[2]),total:num(m[3]),ballSpeed:num(m[4]),confidence:"exact"})
+  }
+  if(!shots.length){
+    const whole=text.replace(/\n/g," ");
+    const re=/\b(\d{1,2})\s+([0-9]{2,3})\s*(?:yd|y0|yo)?\s+([0-9]{2,3})\s*(?:yd|y0|yo)?\s+([0-9]{2,3})\s*(?:mph|mpn|mp)?\b/gi;
+    let m;
+    while((m=re.exec(whole))!==null){
+      const sn=num(m[1]),ca=num(m[2]),to=num(m[3]),bs=num(m[4]);
+      if(sn>=1&&sn<=99&&ca<400&&to<450&&bs<250)shots.push({shotNumber:sn,carry:ca,total:to,ballSpeed:bs,confidence:"exact"})
+    }
+  }
+  const seen=new Set(),dedup=[];
+  for(const s of shots){
+    const k=[s.shotNumber,s.carry,s.total,s.ballSpeed].join("|");
+    if(!seen.has(k)){seen.add(k);dedup.push(s)}
+  }
+  dedup.sort((a,b)=>(a.shotNumber||999)-(b.shotNumber||999));
+  return {
+    type:"Toptracer Shot Table",
+    source:"Toptracer",
+    club:/\bDriver\b/i.test(text)?"Driver":"",
+    selectedShot:{},
+    systemAverages:systemAverages,
+    shots:dedup,
+    confidence:dedup.length?"high":"medium",
+    rawText:text
+  }
+}
+function mergeTableResults(items){
+  const sources=[...new Set(items.map(x=>x.source).filter(Boolean))];
+  const clubs=[...new Set(items.map(x=>x.club).filter(Boolean))];
+  const source=sources.length===1?sources[0]:"";
+  const club=clubs.length===1?clubs[0]:"";
+  const systemAverages={};
+  const keys=["carry","total","ballSpeed","launch","descent","horiz","faceAngle","clubPath","faceToPath","sideCarry","sideTotal"];
+  for(const k of keys){
+    const vals=items.map(x=>x.systemAverages&&x.systemAverages[k]).filter(Number.isFinite);
+    if(vals.length)systemAverages[k]=avg(vals)
+  }
+  const seen=new Set(),shots=[];
+  for(const s of items.flatMap(x=>x.shots||[])){
+    const k=[s.shotNumber,s.carry,s.total,s.ballSpeed,s.launch,s.descent,s.horiz,s.faceAngle,s.clubPath,s.faceToPath,s.sideCarry,s.sideTotal].join("|");
+    if(!seen.has(k)){seen.add(k);shots.push(s)}
+  }
+  shots.sort((a,b)=>(b.shotNumber||0)-(a.shotNumber||0));
+  return {source:source,club:club,systemAverages:systemAverages,selectedShot:{},shots:shots,items:items}
+}
+
+document.getElementById("analyzeBtn").onclick=async()=>{
+  if(!selectedFiles.length)return;
+  document.getElementById("analyzeBtn").disabled=true;
+  document.getElementById("review").classList.remove("show");
+  try{
+    await ensureTesseract();
+    const worker=await Tesseract.createWorker("eng",1,{
+      logger:m=>{
+        if(m.status==="recognizing text")setProgress(8+(m.progress||0)*82,"Reading shot-history table...")
+      }
+    });
+    const parsed=[];
+    for(let i=0;i<selectedFiles.length;i++){
+      const file=selectedFiles[i];
+      setProgress(5+(i/selectedFiles.length)*88,"Reading "+(i+1)+" of "+selectedFiles.length+": "+file.name);
+      let item=await parseFullSwingHistory(file,worker);
+      if(!item||item.shots.length<2){
+        const img=await imageFromFile(file),canvas=makeCanvas(img);
+        const full=await ocrCanvas(worker,canvas,6,"");
+        if(/FLAT CARRY|DISTANCE TREND|BALL SPEED|TOPTRACER/i.test(full.text))item=parseToptracer(full.text)
+      }
+      if(item&&item.shots.length)parsed.push(item)
+    }
+    await worker.terminate();
+    if(!parsed.length)throw new Error("No supported shot-history table was detected. For now, use a Full Swing Shot History or Toptracer table screen.");
+    const merged=mergeTableResults(parsed);
+    const inferredDate=new Date(Math.max(...selectedFiles.map(f=>f.lastModified||Date.now()))).toISOString().slice(0,10);
+    pending={
+      ...merged,
+      rawText:parsed.map(x=>x.rawText).join("\n\n--- SCREENSHOT ---\n\n"),
+      filenames:selectedFiles.map(f=>f.name),
+      date:inferredDate
+    };
+    showReview();
+    setProgress(100,"Extraction complete. Found "+pending.shots.length+" shot row"+(pending.shots.length===1?"":"s")+".")
+  }catch(err){
+    setProgress(0,"Could not extract table: "+err.message)
+  }finally{
+    document.getElementById("analyzeBtn").disabled=false
+  }
+};
+
+const labels={
     carry:["carry"],total:["total"],ballSpeed:["ball speed"],clubSpeed:["club speed"],
     smash:["smash factor"],apex:["apex"],spin:["spin rate"],spinAxis:["spin axis"],
     faceAngle:["face angle"],clubPath:["club path"]
@@ -573,8 +818,9 @@ document.getElementById("analyzeBtn").onclick=async()=>{
 
 const labels={
   carry:["Carry","yd"],total:["Total","yd"],ballSpeed:["Ball speed","mph"],clubSpeed:["Club speed","mph"],
-  smash:["Smash",""],spin:["Spin","rpm"],launch:["Launch","°"],apex:["Apex","ft"],offline:["Offline","yd"],
-  spinAxis:["Spin axis","°"],faceAngle:["Face angle","°"],clubPath:["Club path","°"]
+  smash:["Smash",""],spin:["Spin","rpm"],launch:["Launch","°"],descent:["Descent","°"],apex:["Apex","ft"],
+  offline:["Offline","yd"],horiz:["Horizontal","°"],spinAxis:["Spin axis","°"],faceAngle:["Face angle","°"],
+  clubPath:["Club path","°"],faceToPath:["Face to path","°"],sideCarry:["Side carry","yd"],sideTotal:["Side total","yd"]
 };
 function metricCards(obj,confidence="system reported"){
   const entries=Object.entries(labels).filter(([k])=>Number.isFinite(obj?.[k]));
@@ -626,23 +872,41 @@ function showReview(){
   document.getElementById("qLocation").value="";
   document.getElementById("review").classList.add("show")
 }
+
+function signedDisplay(v,unit){
+  unit=unit||"°";
+  if(!Number.isFinite(v))return "--";
+  if(v===0)return "0"+unit;
+  return Math.abs(v).toFixed(1)+unit+" "+(v<0?"L":"R")
+}
 function shotTable(shots){
-  if(!shots.length)return `<tr><td class="empty">No exact rows detected.</td></tr>`;
+  if(!shots.length)return '<tr><td class="empty">No exact rows detected.</td></tr>';
   const cols=[
     ["shotNumber","Shot"],["carry","Carry"],["total","Total"],["ballSpeed","Ball speed"],
-    ["clubSpeed","Club speed"],["smash","Smash"],["spin","Spin"],["launch","Launch"],["offline","Offline"]
+    ["clubSpeed","Club speed"],["smash","Smash"],["spin","Spin"],["launch","Launch"],["descent","Descent"],
+    ["horiz","Horiz"],["faceAngle","Face"],["clubPath","Club path"],["faceToPath","Face to path"],
+    ["sideCarry","Side carry"],["sideTotal","Side total"],["offline","Offline"]
   ];
-  const used=cols.filter(([k])=>shots.some(s=>Number.isFinite(s[k])));
-  return `<thead><tr>${used.map(([,l])=>`<th>${l}</th>`).join("")}</tr></thead><tbody>`+
-    shots.map(s=>`<tr>${used.map(([k])=>{
+  const directional=new Set(["horiz","faceAngle","clubPath","faceToPath","sideCarry","sideTotal","offline"]);
+  const used=cols.filter(pair=>shots.some(s=>Number.isFinite(s[pair[0]])));
+  let html="<thead><tr>"+used.map(pair=>"<th>"+pair[1]+"</th>").join("")+"</tr></thead><tbody>";
+  html+=shots.map(s=>{
+    return "<tr>"+used.map(pair=>{
+      const k=pair[0];
       if(!Number.isFinite(s[k]))return "<td>--</td>";
+      if(directional.has(k)){
+        const unit=["sideCarry","sideTotal","offline"].includes(k)?" yd":"°";
+        return "<td>"+signedDisplay(s[k],unit)+"</td>"
+      }
       let suffix="";
-      if(["carry","total","offline"].includes(k))suffix=" yd";
+      if(["carry","total"].includes(k))suffix=" yd";
       if(["ballSpeed","clubSpeed"].includes(k))suffix=" mph";
       if(k==="spin")suffix=" rpm";
-      if(k==="launch")suffix="°";
-      return `<td>${fmt(s[k],k==="smash"?2:(k==="shotNumber"?0:1))}${suffix}</td>`
-    }).join("")}</tr>`).join("")+"</tbody>"
+      if(["launch","descent"].includes(k))suffix="°";
+      return "<td>"+fmt(s[k],k==="smash"?2:(k==="shotNumber"?0:1))+suffix+"</td>"
+    }).join("")+"</tr>"
+  }).join("");
+  return html+"</tbody>"
 }
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
